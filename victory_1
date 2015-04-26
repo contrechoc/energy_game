@@ -1,0 +1,152 @@
+//https://github.com/JChristensen/tinySPI/blob/master/tinySPI.cpp
+
+
+#include <stdint.h>
+#include <avr/io.h>
+#include <util/atomic.h>
+
+#define USCK_DD_PIN DDB2
+#define DO_DD_PIN DDB1
+
+//           RST        V
+// LED 9   - PB3        PB2    USI - clock
+// CAP ANA - PB4        PB1    USI - data
+//           GND        PB0    relay
+
+char energyWinCounter = 0;
+
+void adc_init();
+unsigned short adc_read(unsigned char pin);
+uint8_t spi_transfer(uint8_t data);
+void usi_init();
+
+
+uint8_t spi_transfer(uint8_t data)
+{
+	USIDR = data;
+	USISR = _BV(USIOIF); //clear counter and counter overflow interrupt flag
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)   //ensure a consistent clock period
+	{
+		while ( !(USISR & _BV(USIOIF)) ) USICR |= _BV(USITC);
+	}
+	return USIDR;
+}
+
+
+
+void setup()
+{
+	adc_init();
+	usi_init();
+	
+	DDRB |= _BV(PB3); //set the PB3 pin as output to LED 9
+	DDRB |= _BV(PB0); //set the PB0 pin as output to relay
+	
+ 
+	for(int i = 0; i < 8; i++)
+	{
+		spi_transfer( 1 << i);
+		delay(100);
+	}
+
+}
+
+void loop()
+{
+	adc_init();
+
+	//the adc pins had to be tied to the GND with a 1MOhm resistor
+	delay(10);
+	//only the higher values are interesting for the game
+	unsigned short energy1 = 0;
+	unsigned short readEnergy1 = (unsigned short)(adc_read(2));
+
+	if ((readEnergy1 >= 256) && (readEnergy1 < 512) ) energy1 = 1;//1.4V
+	else if ( (readEnergy1 >= 512) && (readEnergy1 < 624)) energy1 = 2;//2.5V
+	else if ( (readEnergy1 >= 624) && (readEnergy1 < 740)) energy1 = 3;//3.0V
+	else if ( (readEnergy1 >= 740) && (readEnergy1 < 860)) energy1 = 4;//3.7V
+	else if ( (readEnergy1 >= 860) && (readEnergy1 < 980)) energy1 = 5;//4.3V
+	else if ( (readEnergy1 >= 980) && (readEnergy1 < 1010)) energy1 = 6;//4.9V
+	else if (readEnergy1 >= 1010) energy1 = 7;//5.0V
+
+	delay(10);
+	//testing step value
+	// unsigned short energy2 = (unsigned short)((adc_read(2)) / 140);
+
+	unsigned short energy2 = 6+ (unsigned short)((adc_read(2)) / 14);
+	
+	if ( energy1 == 7)energy2 = 7;
+
+if ( energy1 == 7 ) energyWinCounter++;
+if ( energyWinCounter > 10 ){ //5 seconds in highest voltage
+	//this chip has won
+	//blink LED 9 for this chip
+	for ( int k = 0; k<5; k++){
+			PORTB |= _BV(PB3);
+			delay(250);
+			PORTB &= ~_BV(PB3);
+			delay(250);
+	}
+	//discharge with relay
+	while ( (unsigned short)((adc_read(2))) > 256)
+	{
+			PORTB |= _BV(PB0); //signal to relay: discharge
+			delay(250);
+	}
+}
+
+	usi_init();
+	spi_transfer( (1 << (energy1)) | (1 << (energy2 % 8)) );
+
+	delay(500);
+
+}
+
+void usi_init()
+{
+
+	USICR &= ~(_BV(USISIE) | _BV(USIOIE) | _BV(USIWM1));
+	USICR |= _BV(USIWM0) | _BV(USICS1) | _BV(USICLK);
+
+	DDRB |= _BV(USCK_DD_PIN); //set the USCK pin as output
+	DDRB |= _BV(DO_DD_PIN); //set the DO pin as output
+
+}
+
+
+
+void adc_init()
+{
+	/* internal pull-ups interfere with the ADC. disable the
+	* pull-up on the pin if it's being used for ADC. either
+	* writing 0 to the port register or setting it to output
+	* should be enough to disable pull-ups. */
+	//PORTB &= ~_BV(PB3);
+	//DDRB &= ~_BV(PB3);
+	PORTB &= ~_BV(PB4);
+	DDRB &= ~_BV(PB4);
+	/* unless otherwise configured, arduinos use the internal Vcc
+	* reference. MUX 0x0f samples the ground (0.0V). */
+	ADMUX = 0x0D;//B1101 = GND attiny45 page 139
+	/*//
+	* Enable the ADC system, use 128 as the clock divider on a 16MHz
+	* arduino (ADC needs a 50 - 200kHz clock) and start a sample. the
+	* AVR needs to do some set-up the first time the ADC is used; this
+	* first, discarded, sample primes the system for later use.
+	*/
+	ADCSRA |= _BV(ADEN) | _BV(ADPS1) | _BV(ADPS0) | _BV(ADSC);
+	/* wait for the ADC to return a sample */
+	loop_until_bit_is_clear(ADCSRA, ADSC);
+}
+unsigned short adc_read(unsigned char pin)
+{
+	unsigned char l, h, r;
+	r = (ADMUX & 0xf0) | (pin & 0x0f);
+	ADMUX = r; /* select the input channel */
+	ADCSRA |= _BV(ADSC);
+	loop_until_bit_is_clear(ADCSRA, ADSC);
+	/* must read the low ADC byte before the high ADC byte */
+	l = ADCL;
+	h = ADCH;
+	return ((unsigned short)h << 8) | l;
+}
