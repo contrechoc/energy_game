@@ -43,18 +43,15 @@ void setup()
 	startIndicator();
 	dischargeSuperCaps();
 	startIndicator();
-
 }
 
 void startIndicator()
 {
-
 	for(int i = 0; i < 8; i++)
 	{
 		spi_transfer( 1 << i);
 		delay(100);
 	}
-
 }
 
 void loop()
@@ -76,14 +73,12 @@ void loop()
 	else if (readEnergy1 >= 1010) energy1 = 7;//5.0V
 
 	delay(10);
-	//testing step value
-	// unsigned short energy2 = (unsigned short)((adc_read(2)) / 140);
 
 	unsigned short energy2 = 6 + (unsigned short)((adc_read(2)) / 14);
 
-	if ( energy1 == 7)energy2 = 7;
-
+	if ( energy1 == 7 ) energy2 = 7;
 	if ( energy1 == 7 ) energyWinCounter++;
+	
 	if ( energyWinCounter > 10 )  //5 seconds in highest voltage
 	{
 		//this chip has won
@@ -104,7 +99,6 @@ void loop()
 	spi_transfer( (1 << (energy1)) | (1 << (energy2 % 8)) );
 
 	delay(500);
-
 }
 
 void dischargeSuperCaps()
@@ -138,30 +132,26 @@ void dischargeSuperCaps()
 
 void usi_init()
 {
-
 	USICR &= ~(_BV(USISIE) | _BV(USIOIE) | _BV(USIWM1));
 	USICR |= _BV(USIWM0) | _BV(USICS1) | _BV(USICLK);
 
 	DDRB |= _BV(USCK_DD_PIN); //set the USCK pin as output
 	DDRB |= _BV(DO_DD_PIN); //set the DO pin as output
-
 }
 
 
 
 void adc_init()
 {
-
 	//DDRB &= ~_BV(PB3);
 	PORTB &= ~_BV(PB4);
 	DDRB &= ~_BV(PB4);
 
 	ADMUX = 0x0D;//B1101 = GND attiny45 page 139
-
 	ADCSRA |= _BV(ADEN) | _BV(ADPS1) | _BV(ADPS0) | _BV(ADSC);
-
 	loop_until_bit_is_clear(ADCSRA, ADSC);
 }
+
 unsigned short adc_read(unsigned char pin)
 {
 	unsigned char l, h, r;
