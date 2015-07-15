@@ -153,7 +153,7 @@ void dischargeSuperCaps()
 		delay(1000);
 		usi_init();
 		unsigned short energy1 = 0;
-		unsigned short readEnergy1 = (unsigned short)(adc_read(2));
+		readEnergy1 = (unsigned short)(adc_read(2));
 		if ((readEnergy1 >= 256) && (readEnergy1 < 512) ) energy1 = 1;//1.4V
 		else if ( (readEnergy1 >= 512) && (readEnergy1 < 624)) energy1 = 2;//2.5V
 		else if ( (readEnergy1 >= 624) && (readEnergy1 < 740)) energy1 = 3;//3.0V
